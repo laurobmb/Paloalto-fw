@@ -1,10 +1,11 @@
 import boto3
 import json
 import ssl
-import urllib
-import urllib2
 import xml.etree.ElementTree as ET
 import gzip
+import urllib.request
+import urllib.parse
+
 
 def paloalto_rule_move(pa_ip,pa_key,params):
     # Move rule locatoin in security rule base
@@ -16,7 +17,7 @@ def paloalto_rule_move(pa_ip,pa_key,params):
     
     
     # set the context to ignore unverified SSL certificates
-    ctx = ssl.create_default_context()
+    ctx = ssl._create_unverified_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
 
@@ -31,8 +32,8 @@ def paloalto_rule_move(pa_ip,pa_key,params):
     elif params['location'] == 'before':
         parameters = {'xpath': "/config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/rulebase/security/rules/entry[@name=\'"+params['rule_name']+"\']",'where':"before",'dst':params['dst_rule']}
          
-    url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.urlencode(parameters)
-    response = urllib2.urlopen(url, context=ctx)
+    url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.request.urlopen(parameters)
+    response = urllib.request.urlopen(url, context=ctx)
     contents= ET.fromstring(response.read())
 
 def paloalto_rule_findbyname(pa_ip,pa_key,rule_name):  
@@ -40,15 +41,13 @@ def paloalto_rule_findbyname(pa_ip,pa_key,rule_name):
 	# Input: Palo Alto gateway IP, Palo Alto Access Key, and rule name
 	# returns a list of matching rule names
 
-	ctx = ssl.create_default_context()
-	ctx.check_hostname = False
-	ctx.verify_mode = ssl.CERT_NONE
+	ctx = ssl._create_unverified_context()
+	#ctx.check_hostname = False
+	#ctx.verify_mode = ssl.CERT_NONE
 
 	cmd = "/api/?type=config&action=get&"
-
-	url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.urlencode({'xpath':"/config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/rulebase/security/rules"})
-
-	response = urllib2.urlopen(url, context=ctx)
+	url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.parse.urlencode({'xpath':"/config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/rulebase/security/rules"})
+	response = urllib.request.urlopen(url, context=ctx)
 	contents= ET.fromstring(response.read())
 
 	result = []
@@ -73,35 +72,31 @@ def paloalto_rule_add(pa_ip,pa_key,rule_params):
 	# rule_params['spg']: name of security group profile to be set 
 	# Output: returns 'success' or 'fail' depending on the result
 
-	
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+	ctx = ssl._create_unverified_context()
+	ctx.check_hostname = False
+	ctx.verify_mode = ssl.CERT_NONE
     
-    existing_rules = paloalto_rule_findbyname(pa_ip,pa_key,rule_params['name'])
-    if len(existing_rules) != 0:
-        rule_params['name'] = rule_params['name'] + "-" + str(len(existing_rules)+1)
+	existing_rules = paloalto_rule_findbyname(pa_ip,pa_key,rule_params['name'])
+	if len(existing_rules) != 0:
+		rule_params['name'] = rule_params['name'] + "-" + str(len(existing_rules)+1)
 
-    rule_source_ip = ""
-    rule_destination_ip = ""
-    for i in rule_params['srcIP']:
-        rule_source_ip = rule_source_ip + "<member>"+i+"</member>"
+	rule_source_ip = "<member>"+rule_params['srcIP']+"</member>"
+	rule_destination_ip ="<member>"+rule_params['dstIP']+"</member>"
 
-    for i in rule_params['dstIP']:
-        rule_destination_ip = rule_destination_ip + "<member>"+i+"</member>"
+	cmd = "/api/?type=config&action=set"
+	xpath="&xpath=/config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/rulebase/security/rules/entry[@name=\'"+rule_params['name']+"\']"
+	element="&element=<to><member>"+rule_params['dstZone']+"</member></to><from><member>"+rule_params['srcZone']+"</member></from><source>"+rule_source_ip+"</source><destination>"+rule_destination_ip+"</destination><application><member>"+rule_params['application']+"</member></application><service><member>"+rule_params['service']+"</member></service><action>"+rule_params['action']+"</action><profile-setting><group><member>"+rule_params['spg']+"</member></group></profile-setting>"
+	key="&Key="+pa_key
 
-	cmd = "/api/?type=config&action=set&"
-	parameters = {'xpath':"/config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/rulebase/security/rules/entry[@name=\'"+rule_params['name']+"\']",'element':"<to><member>"+rule_params['dstZone']+"</member></to><from><member>"+rule_params['srcZone']+"</member></from><source>"+rule_source_ip+"</source><destination>"+rule_destination_ip+"</destination><application><member>"+rule_params['application']+"</member></application><service><member>"+rule_params['service']+"</member></service><action>"+rule_params['action']+"</action><profile-setting><group><member>"+rule_params['spg']+"</member></group></profile-setting>"}
-
-
-	url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.urlencode(parameters)
-
-	response = urllib2.urlopen(url, context=ctx)
-
-
-	contents= ET.fromstring(response.read())
-
-	result = 'success'
+	context = ssl._create_unverified_context()
+	url = "https://"+pa_ip+cmd+key+xpath+element
+	try:
+		pagina=urllib.request.urlopen(url,context=context)
+		contents = ET.fromstring(pagina.read())
+		result = 'success'
+	except urllib.error.HTTPError as e:
+		print(e)
+		
 	return result 
 
 def paloalto_find_matchingrule(pa_ip,pa_key,rule_params):
@@ -117,7 +112,7 @@ def paloalto_find_matchingrule(pa_ip,pa_key,rule_params):
 	# rule_params['protocol']: IP protocol type
 	# Output: Returns the name of matching rule or "" if no matches were found
 
-	ctx = ssl.create_default_context()
+	ctx = ssl._create_unverified_context()
 	ctx.check_hostname = False
 	ctx.verify_mode = ssl.CERT_NONE
 
@@ -157,13 +152,13 @@ def paloalto_find_matchingrule(pa_ip,pa_key,rule_params):
 			else:
 				parameters = {'cmd':"<test><security-policy-match><from>"+rule_params['srcZone']+"</from><to>"+rule_params['dstZone']+"</to><protocol>"+rule_params['protocol']+"</protocol><destination-port>"+rule_params['dstPort']+"</destination-port><destination>"+j+"</destination><source>"+i+"</source></security-policy-match></test>"}
 				
-			url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.urlencode(parameters)
-			print "in rulematch function: ",url
-			response = urllib2.urlopen(url, context=ctx)
+			url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.parse.urlencode(parameters)
+			print("in rulematch function: ",url)
+			response = urllib.request.urlopen(url, context=ctx)
 			contents= ET.fromstring(response.read())
-			print contents.tag
-			print contents.text
-			print "contents: ", contents[0][0]
+			print(contents.tag)
+			print(contents.text)
+			print("contents: ", contents[0][0])
 			if (contents[0][0].text != "\n"):
 				result.append(contents[0][0][0].text)
 	return result
@@ -173,15 +168,15 @@ def paloalto_service_find(pa_ip,pa_key,protocol,port):
 	# Input: Palo Alto gateway IP, Palo Alto Access Key, IP protocol type, and port number
 	# Output: Returns service object name if found or "" if there are no matches
 	
-	ctx = ssl.create_default_context()
+	ctx = ssl._create_unverified_context()
 	ctx.check_hostname = False
 	ctx.verify_mode = ssl.CERT_NONE
 
 	cmd = "/api/?type=config&action=get&"
 	parameters = {'xpath':"/config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/service"}
-	url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.urlencode(parameters)
+	url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.parse.urlencode(parameters)
 
-	response = urllib2.urlopen(url, context=ctx)
+	response = urllib.request.urlopen(url, context=ctx)
 	contents= ET.fromstring(response.read())
 
 	result = ""
@@ -199,17 +194,17 @@ def paloalto_service_add(pa_ip,pa_key,protocol,port):
 	# Input: Palo Alto gateway IP, Palo Alto Access Key, IP protocol type, and port number
 	# Output: Returns service object name created.
 	
-	ctx = ssl.create_default_context()
+	ctx = ssl._create_unverified_context()
 	ctx.check_hostname = False
 	ctx.verify_mode = ssl.CERT_NONE
 
 	cmd = "/api/?type=config&action=set&"
 	parameters = {'xpath': "/config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/service/entry[@name=\'"+protocol+"_"+str(port)+"\']/protocol/tcp",'element':"<port>"+str(port)+"</port>"}
 
-	print "https://"+pa_ip+cmd+"Key="+pa_key+"&"+parameters['xpath']
-	url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.urlencode(parameters)
+	print("https://"+pa_ip+cmd+"Key="+pa_key+"&"+parameters['xpath'])
+	url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.parse.urlencode(parameters)
 
-	response = urllib2.urlopen(url, context=ctx)
+	response = urllib.request.urlopen(url, context=ctx)
 	contents= ET.fromstring(response.read())
 
 	return protocol+"_"+str(port)
@@ -221,16 +216,16 @@ def paloalto_commit(pa_ip,pa_key):
 	cmd = "/api/?type=commit&action=set&"
 	url = "https://"+pa_ip+cmd+"Key="+pa_key+"&cmd=<commit></commit>"
 
-	ctx = ssl.create_default_context()
+	ctx = ssl._create_unverified_context()
 	ctx.check_hostname = False
 	ctx.verify_mode = ssl.CERT_NONE
 
-	response = urllib2.urlopen(url, context=ctx)
-	print response.code
+	response = urllib.request.urlopen(url, context=ctx)
+	print(response.code)
 	contents= ET.fromstring(response.read())
-	print contents.tag
-	print contents.attrib
-	print contents.text
+	print(contents.tag)
+	print(contents.attrib)
+	print(contents.text)
 
 	result = 'success'
 	return result
@@ -239,23 +234,27 @@ def paloalto_rule_delete(pa_ip,pa_key,rule_name):
 	# Delete a rule on the Palo Alto gateway that matches the rule_name provided
 	# Input: Palo Alto gateway IP, Palo Alto Access Key, and rule_name
 	
-	ctx = ssl.create_default_context()
+	ctx = ssl._create_unverified_context()
 	ctx.check_hostname = False
 	ctx.verify_mode = ssl.CERT_NONE
 
 	cmd = "/api/?type=config&action=delete&"
 
-	url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.urlencode({'xpath':"/config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/rulebase/security/rules/entry[@name=\'"+rule_name+"\']"})
+	url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.parse.urlencode({'xpath':"/config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/rulebase/security/rules/entry[@name=\'"+rule_name+"\']"})
 
-	print url    
-	response = urllib2.urlopen(url, context=ctx)
-	print response.code
+	print(url)
+	response = urllib.request.urlopen(url, context=ctx)
+	print(response.code)
 	contents= ET.fromstring(response.read())
-	print contents.tag
-	print contents.attrib
-	print contents.text
+	print(contents.tag)
+	print(contents.attrib)
+	print(contents.text)
 
-	result = 'success'
+	if contents.attrib['code'] == '7':
+		result = 'Error: Nome da regra não existe'
+	else:
+		result = 'Success: Regra '+rule_name+' removida'
+
 	return result
 
 def paloalto_rule_getdetails(pa_ip,pa_key,rule_name):
@@ -270,15 +269,15 @@ def paloalto_rule_getdetails(pa_ip,pa_key,rule_name):
 	# 'service': service object name
 	# 'action': rule action
 	
-	ctx = ssl.create_default_context()
+	ctx = ssl._create_unverified_context()
 	ctx.check_hostname = False
 	ctx.verify_mode = ssl.CERT_NONE
 
 	cmd = "/api/?type=config&action=get&"
 
-	url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.urlencode({'xpath':"/config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/rulebase/security/rules/entry[@name=\'"+rule_name+"\']"})
+	url = "https://"+pa_ip+cmd+"Key="+pa_key+"&"+urllib.parse.urlencode({'xpath':"/config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/rulebase/security/rules/entry[@name=\'"+rule_name+"\']"})
 
-	response = urllib2.urlopen(url, context=ctx)
+	response = urllib.request.urlopen(url, context=ctx)
 	contents= ET.fromstring(response.read())
 
 	results = {} 

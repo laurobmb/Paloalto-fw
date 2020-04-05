@@ -1,10 +1,8 @@
 # Paloalto-fw
-functions to interact with Palo Alto gateways (Tested with Pan-OS 7.1)
-Blog post: https://securitynik.blogspot.ca/2016/07/writing-palo-alto-firewall-rest-api.html
+functions to interact with Palo Alto gateways (Tested with Pan-OS 9.0)
 
+### Adjust the ./configs/.setup.json file with credentials for authentication before using scripts to execute commands
 
-July 14 2016:
-Initial version uploaded. Following functions included:
 * paloalto_rule_move: move a specified security rule to a specific location
 * paloalto_rule_findbyname: find all security rules that contain a specified name
 * paloalto_rule_add: add new security rules
@@ -14,3 +12,6 @@ Initial version uploaded. Following functions included:
 * paloalto_commit: commit changes
 * paloalto_rule_delete: delete a specific rule
 * paloalto_rule_getdetails: get rule parameters for a specified rule
+
+
+Blog post reference: https://securitynik.blogspot.ca/2016/07/writing-palo-alto-firewall-rest-api.html
